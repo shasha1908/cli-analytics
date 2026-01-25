@@ -45,6 +45,8 @@ class RawEvent(Base):
     )
     session_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     workflow_run_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    experiment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    variant: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
 
 class Session(Base):
@@ -119,3 +121,30 @@ class ApiKey(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+
+class Experiment(Base):
+    """A/B test experiments."""
+
+    __tablename__ = "experiments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    variants: Mapped[list] = mapped_column(JSONB, nullable=False)
+    target_commands: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    traffic_pct: Mapped[int] = mapped_column(Integer, default=100)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class VariantAssignment(Base):
+    """Consistent variant assignment per actor."""
+
+    __tablename__ = "variant_assignments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(Integer, ForeignKey("experiments.id"), nullable=False)
+    actor_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    variant: Mapped[str] = mapped_column(String(64), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

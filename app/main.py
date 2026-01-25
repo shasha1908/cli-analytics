@@ -13,6 +13,8 @@ from app.ingest import router as ingest_router
 from app.infer import router as infer_router
 from app.reports import router as reports_router
 from app.keys import router as keys_router
+from app.recommendations import router as recommendations_router
+from app.experiments import router as experiments_router
 from app.schemas import HealthResponse
 from app.settings import get_settings
 
@@ -44,6 +46,8 @@ app.include_router(ingest_router, tags=["Ingestion"])
 app.include_router(infer_router, tags=["Inference"])
 app.include_router(reports_router, tags=["Reports"])
 app.include_router(keys_router, tags=["API Keys"])
+app.include_router(recommendations_router, tags=["Recommendations"])
+app.include_router(experiments_router, tags=["Experiments"])
 
 
 @app.get("/health", response_model=HealthResponse)
