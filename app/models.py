@@ -107,3 +107,15 @@ class InferenceCursor(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     last_event_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ApiKey(Base):
+    """API keys for authentication."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

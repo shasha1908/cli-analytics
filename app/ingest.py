@@ -5,10 +5,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy.orm import Session as DBSession
 
 from app.db import get_db
+from app.auth import verify_api_key
 from app.models import RawEvent
 from app.privacy import (
     hash_identifier,
@@ -90,6 +91,7 @@ def process_event(event: EventInput, db: DBSession) -> tuple[bool, str]:
 def ingest_events(
     payload: Union[EventInput, BatchEventInput],
     db: DBSession = Depends(get_db),
+    _: None = Security(verify_api_key),
 ) -> IngestResponse:
     """
     Ingest one or more CLI events.
