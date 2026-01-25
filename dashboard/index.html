@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Analytics Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; color: #38bdf8; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: #1e293b; padding: 20px; border-radius: 8px; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: #38bdf8; }
+        .stat-label { font-size: 0.875rem; color: #94a3b8; margin-top: 4px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 8px; }
+        .card h2 { font-size: 1rem; margin-bottom: 16px; color: #94a3b8; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; }
+        th { color: #64748b; font-weight: 500; }
+        .success { color: #4ade80; }
+        .failed { color: #f87171; }
+        .abandoned { color: #fbbf24; }
+        .hot-path { font-family: monospace; font-size: 0.75rem; color: #cbd5e1; word-break: break-all; }
+        .config { margin-bottom: 20px; display: flex; gap: 10px; }
+        .config input { padding: 8px 12px; border-radius: 4px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; flex: 1; }
+        .config button { padding: 8px 16px; border-radius: 4px; border: none; background: #38bdf8; color: #0f172a; cursor: pointer; font-weight: 500; }
+        .config button:hover { background: #0ea5e9; }
+        .error { color: #f87171; padding: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CLI Analytics Dashboard</h1>
+
+        <div class="config">
+            <input type="text" id="endpoint" placeholder="API Endpoint" value="https://cli-analytics-1.onrender.com">
+            <button onclick="loadData()">Load Data</button>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="total-events">-</div>
+                <div class="stat-label">Total Events</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-sessions">-</div>
+                <div class="stat-label">Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-workflows">-</div>
+                <div class="stat-label">Workflows</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="success-rate">-</div>
+                <div class="stat-label">Avg Success Rate</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h2>Workflows by Outcome</h2>
+                <canvas id="outcomes-chart"></canvas>
+            </div>
+
+            <div class="card">
+                <h2>Top Workflows</h2>
+                <table>
+                    <thead><tr><th>Workflow</th><th>Runs</th><th>Success</th></tr></thead>
+                    <tbody id="workflows-table"></tbody>
+                </table>
+            </div>
+
+            <div class="card" style="grid-column: 1 / -1;">
+                <h2>Failure Hot Paths</h2>
+                <table>
+                    <thead><tr><th>Workflow</th><th>Failures</th><th>Command Path</th></tr></thead>
+                    <tbody id="hotpaths-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        async function loadData() {
+            const endpoint = document.getElementById('endpoint').value.replace(/\/$/, '');
+
+            try {
+                const res = await fetch(`${endpoint}/reports/summary`);
+                if (!res.ok) throw new Error('Failed to fetch');
+                const data = await res.json();
+                renderDashboard(data);
+            } catch (e) {
+                document.getElementById('total-events').textContent = 'Error';
+                console.error(e);
+            }
+        }
+
+        function renderDashboard(data) {
+            document.getElementById('total-events').textContent = data.total_events.toLocaleString();
+            document.getElementById('total-sessions').textContent = data.total_sessions.toLocaleString();
+            document.getElementById('total-workflows').textContent = data.total_workflows.toLocaleString();
+
+            // Calculate average success rate
+            const avgRate = data.top_workflows.length
+                ? (data.top_workflows.reduce((a, w) => a + w.success_rate, 0) / data.top_workflows.length).toFixed(1) + '%'
+                : '-';
+            document.getElementById('success-rate').textContent = avgRate;
+
+            // Workflows table
+            const wfTable = document.getElementById('workflows-table');
+            wfTable.innerHTML = data.top_workflows.map(w => `
+                <tr>
+                    <td>${w.workflow_name}</td>
+                    <td>${w.total_runs}</td>
+                    <td class="success">${w.success_rate}%</td>
+                </tr>
+            `).join('');
+
+            // Hot paths table
+            const hpTable = document.getElementById('hotpaths-table');
+            hpTable.innerHTML = data.failure_hot_paths.length
+                ? data.failure_hot_paths.map(h => `
+                    <tr>
+                        <td>${h.workflow_name}</td>
+                        <td class="failed">${h.failure_count}</td>
+                        <td class="hot-path">${h.command_fingerprint}</td>
+                    </tr>
+                `).join('')
+                : '<tr><td colspan="3" style="text-align:center;color:#64748b;">No failures yet</td></tr>';
+
+            // Chart
+            const totals = data.top_workflows.reduce((acc, w) => {
+                acc.success += w.success_count;
+                acc.failed += w.failed_count;
+                acc.abandoned += w.abandoned_count;
+                return acc;
+            }, { success: 0, failed: 0, abandoned: 0 });
+
+            if (chart) chart.destroy();
+            chart = new Chart(document.getElementById('outcomes-chart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Success', 'Failed', 'Abandoned'],
+                    datasets: [{
+                        data: [totals.success, totals.failed, totals.abandoned],
+                        backgroundColor: ['#4ade80', '#f87171', '#fbbf24']
+                    }]
+                },
+                options: {
+                    plugins: { legend: { labels: { color: '#94a3b8' } } }
+                }
+            });
+        }
+
+        loadData();
+    </script>
+</body>
+</html>

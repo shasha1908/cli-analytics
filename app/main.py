@@ -1,8 +1,11 @@
 """FastAPI application entrypoint."""
 import logging
 import sys
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 
 from app.db import engine
@@ -26,6 +29,14 @@ app = FastAPI(
     title="CLI Analytics",
     description="Workflow/Outcome Intelligence for CLI Tools",
     version="0.1.0",
+)
+
+# CORS for dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include routers
@@ -59,4 +70,14 @@ def root():
         "service": "CLI Analytics",
         "version": "0.1.0",
         "docs": "/docs",
+        "dashboard": "/dashboard",
     }
+
+
+@app.get("/dashboard")
+def dashboard():
+    """Serve the dashboard."""
+    dashboard_path = Path(__file__).parent.parent / "dashboard" / "index.html"
+    if dashboard_path.exists():
+        return FileResponse(dashboard_path)
+    return {"error": "Dashboard not found"}
