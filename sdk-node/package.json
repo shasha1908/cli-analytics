@@ -1,0 +1,28 @@
+{
+  "name": "cli-analytics",
+  "version": "0.1.0",
+  "description": "Privacy-first analytics for CLI tools",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "cli",
+    "analytics",
+    "telemetry",
+    "privacy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
