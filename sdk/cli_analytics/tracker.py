@@ -78,6 +78,9 @@ class Tracker:
         error_type: Optional[str] = None,
         experiment: Optional[str] = None,
         variant: Optional[str] = None,
+        session_hint: Optional[str] = None,
+        ci_detected: Optional[bool] = None,
+        metadata: Optional[dict] = None,
     ):
         """Track a CLI command execution."""
         event = {
@@ -91,7 +94,9 @@ class Tracker:
             "error_type": error_type,
             "actor_id": _get_actor_id(),
             "machine_id": _get_machine_id(),
-            "ci_detected": _detect_ci(),
+            "ci_detected": ci_detected if ci_detected is not None else _detect_ci(),
+            "session_hint": session_hint,
+            "metadata": metadata,
         }
 
         try:
