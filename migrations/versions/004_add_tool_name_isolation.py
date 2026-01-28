@@ -7,8 +7,8 @@ Create Date: 2025-01-27
 from alembic import op
 import sqlalchemy as sa
 
-revision = '004'
-down_revision = '003'
+revision = '004_add_tool_name_isolation'
+down_revision = '003_recommendations_experiments'
 branch_labels = None
 depends_on = None
 
