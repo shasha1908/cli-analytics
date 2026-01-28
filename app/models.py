@@ -55,6 +55,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="default")
     actor_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     machine_id_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     session_hint: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
@@ -73,6 +74,7 @@ class WorkflowRun(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("sessions.id"), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="default")
     workflow_name: Mapped[str] = mapped_column(String(128), nullable=False)
     outcome: Mapped[str] = mapped_column(String(32), nullable=False)  # SUCCESS, FAILED, ABANDONED
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -119,6 +121,7 @@ class ApiKey(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="default")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -129,7 +132,8 @@ class Experiment(Base):
     __tablename__ = "experiments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    tool_name: Mapped[str] = mapped_column(String(128), nullable=False, default="default")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     variants: Mapped[list] = mapped_column(JSONB, nullable=False)
     target_commands: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)

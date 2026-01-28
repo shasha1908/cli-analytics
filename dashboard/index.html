@@ -37,6 +37,7 @@
 
         <div class="config">
             <input type="text" id="endpoint" placeholder="API Endpoint" value="https://cli-analytics-1.onrender.com">
+            <input type="password" id="api-key" placeholder="API Key (required)">
             <button onclick="loadData()">Load Data</button>
         </div>
 
@@ -88,14 +89,24 @@
 
         async function loadData() {
             const endpoint = document.getElementById('endpoint').value.replace(/\/$/, '');
+            const apiKey = document.getElementById('api-key').value;
+
+            if (!apiKey) {
+                alert('API Key is required');
+                return;
+            }
 
             try {
-                const res = await fetch(`${endpoint}/reports/summary`);
+                const res = await fetch(`${endpoint}/reports/summary`, {
+                    headers: { 'X-API-Key': apiKey }
+                });
+                if (res.status === 401) throw new Error('Invalid API key');
                 if (!res.ok) throw new Error('Failed to fetch');
                 const data = await res.json();
                 renderDashboard(data);
             } catch (e) {
                 document.getElementById('total-events').textContent = 'Error';
+                alert(e.message);
                 console.error(e);
             }
         }

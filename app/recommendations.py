@@ -1,17 +1,18 @@
 """CLI recommendations based on usage patterns."""
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, and_
+from fastapi import APIRouter, Depends, Query, Security
+from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 from pydantic import BaseModel
 from typing import Optional
 from app.db import get_db
-from app.models import RawEvent, WorkflowRun, WorkflowStep
+from app.auth import verify_api_key
+from app.models import ApiKey, RawEvent, WorkflowRun
 
 router = APIRouter()
 
 
 class Recommendation(BaseModel):
-    type: str  # "before_command", "after_failure", "common_sequence"
+    type: str
     message: str
     confidence: float
     based_on_samples: int
@@ -24,35 +25,28 @@ class RecommendationsResponse(BaseModel):
 
 @router.get("/recommendations", response_model=RecommendationsResponse)
 def get_recommendations(
-    command: str = Query(..., description="Command to get recommendations for (e.g., 'deploy')"),
+    command: str = Query(..., description="Command to get recommendations for"),
     context: Optional[str] = Query(None, description="Previous command for context"),
     failed: bool = Query(False, description="Whether the command failed"),
     db: DBSession = Depends(get_db),
+    api_key: ApiKey = Security(verify_api_key),
 ) -> RecommendationsResponse:
-    """Get recommendations for a command based on usage patterns."""
+    """Get recommendations for a command based on usage patterns for this tool."""
+    tool_name = api_key.tool_name
     recommendations = []
     command_lower = command.lower()
 
-    # 1. Find what commands usually come before this one in successful workflows
-    before_query = db.query(
-        RawEvent.command_path,
-        func.count().label("cnt")
-    ).join(
-        WorkflowRun, RawEvent.workflow_run_id == WorkflowRun.id
-    ).filter(
-        WorkflowRun.outcome == "SUCCESS"
-    ).group_by(RawEvent.command_path).order_by(func.count().desc()).limit(100).all()
-
-    # Analyze sequences
-    command_pairs = {}
+    # Analyze sequences for this tool only
     events_by_workflow = db.query(
         RawEvent.workflow_run_id,
         RawEvent.command_path,
         RawEvent.exit_code
     ).filter(
+        RawEvent.tool_name == tool_name,
         RawEvent.workflow_run_id.isnot(None)
     ).order_by(RawEvent.workflow_run_id, RawEvent.timestamp).all()
 
+    command_pairs = {}
     current_wf = None
     prev_cmd = None
     for wf_id, cmd_path, exit_code in events_by_workflow:
@@ -70,7 +64,7 @@ def get_recommendations(
                 command_pairs[key]["fail"] += 1
         prev_cmd = cmd
 
-    # 2. If command failed, find what usually helps
+    # If command failed, find what usually helps
     if failed:
         recovery_cmds = {}
         for (prev, curr), stats in command_pairs.items():
@@ -86,7 +80,7 @@ def get_recommendations(
                 based_on_samples=recovery_cmds[best_recovery]
             ))
 
-    # 3. Find common prerequisites
+    # Find common prerequisites
     prereqs = {}
     for (prev, curr), stats in command_pairs.items():
         if curr == command_lower:
@@ -104,7 +98,7 @@ def get_recommendations(
                 based_on_samples=prereqs[best_prereq]["total"]
             ))
 
-    # 4. Find common next steps
+    # Find common next steps
     next_steps = {}
     for (prev, curr), stats in command_pairs.items():
         if prev == command_lower and stats["success"] > 0:

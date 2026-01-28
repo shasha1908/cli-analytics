@@ -1,0 +1,15 @@
+{
+  "name": "mycli-node",
+  "version": "1.0.0",
+  "description": "Example Node.js CLI with cli-analytics integration",
+  "main": "cli.js",
+  "bin": {
+    "mycli-node": "./cli.js"
+  },
+  "scripts": {
+    "start": "node cli.js"
+  },
+  "dependencies": {
+    "commander": "^11.0.0"
+  }
+}

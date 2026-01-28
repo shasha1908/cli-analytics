@@ -182,6 +182,7 @@ def sessionize_events(db: DBSession, events: list[RawEvent]) -> dict[int, list[R
             if should_start_new_session:
                 # Create new session
                 new_session = SessionModel(
+                    tool_name=event.tool_name,
                     actor_id_hash=actor_hash,
                     machine_id_hash=machine_hash,
                     session_hint=event.session_hint,
@@ -312,6 +313,7 @@ def create_workflow(
     # Create workflow run
     workflow = WorkflowRun(
         session_id=session_id,
+        tool_name=events[0].tool_name,
         workflow_name=workflow_name,
         outcome=outcome,
         started_at=events[0].timestamp,

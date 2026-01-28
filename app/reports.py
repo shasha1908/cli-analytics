@@ -3,12 +3,13 @@ import logging
 from collections import Counter
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Security
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session as DBSession
 
 from app.db import get_db
-from app.models import RawEvent, WorkflowRun, WorkflowStep
+from app.auth import verify_api_key
+from app.models import ApiKey, RawEvent, WorkflowRun, WorkflowStep
 from app.models import Session as SessionModel
 from app.schemas import (
     FailureHotPath,
@@ -35,32 +36,31 @@ def calculate_median(values: list[int]) -> Optional[int]:
 
 
 @router.get("/reports/summary", response_model=SummaryReport)
-def get_summary_report(db: DBSession = Depends(get_db)) -> SummaryReport:
-    """
-    Get overall summary report including:
-    - Top workflows by count
-    - Success rate per workflow
-    - Median time to success per workflow
-    - Top failure hot paths
-    """
-    # Total counts
-    total_events = db.query(func.count(RawEvent.id)).scalar() or 0
-    total_sessions = db.query(func.count(SessionModel.id)).scalar() or 0
-    total_workflows = db.query(func.count(WorkflowRun.id)).scalar() or 0
+def get_summary_report(
+    db: DBSession = Depends(get_db),
+    api_key: ApiKey = Security(verify_api_key),
+) -> SummaryReport:
+    """Get summary report filtered by tool_name from API key."""
+    tool_name = api_key.tool_name
 
-    # Get workflow statistics using case expressions
+    # Total counts filtered by tool
+    total_events = db.query(func.count(RawEvent.id)).filter(RawEvent.tool_name == tool_name).scalar() or 0
+    total_sessions = db.query(func.count(SessionModel.id)).filter(SessionModel.tool_name == tool_name).scalar() or 0
+    total_workflows = db.query(func.count(WorkflowRun.id)).filter(WorkflowRun.tool_name == tool_name).scalar() or 0
+
+    # Get workflow statistics
     workflow_stats = db.query(
         WorkflowRun.workflow_name,
         func.count(WorkflowRun.id).label("total"),
         func.sum(case((WorkflowRun.outcome == "SUCCESS", 1), else_=0)).label("success"),
         func.sum(case((WorkflowRun.outcome == "FAILED", 1), else_=0)).label("failed"),
         func.sum(case((WorkflowRun.outcome == "ABANDONED", 1), else_=0)).label("abandoned"),
-    ).group_by(WorkflowRun.workflow_name).order_by(func.count(WorkflowRun.id).desc()).limit(10).all()
+    ).filter(WorkflowRun.tool_name == tool_name).group_by(WorkflowRun.workflow_name).order_by(func.count(WorkflowRun.id).desc()).limit(10).all()
 
     top_workflows = []
     for stat in workflow_stats:
-        # Get durations for successful workflows
         durations = db.query(WorkflowRun.duration_ms).filter(
+            WorkflowRun.tool_name == tool_name,
             WorkflowRun.workflow_name == stat.workflow_name,
             WorkflowRun.outcome == "SUCCESS",
             WorkflowRun.duration_ms.isnot(None),
@@ -84,6 +84,7 @@ def get_summary_report(db: DBSession = Depends(get_db)) -> SummaryReport:
 
     # Get failure hot paths
     failed_workflows = db.query(WorkflowRun).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.outcome == "FAILED",
         WorkflowRun.command_fingerprint.isnot(None),
     ).all()
@@ -118,39 +119,37 @@ def get_summary_report(db: DBSession = Depends(get_db)) -> SummaryReport:
 def get_workflow_detail(
     workflow_name: str,
     db: DBSession = Depends(get_db),
+    api_key: ApiKey = Security(verify_api_key),
 ) -> WorkflowDetail:
-    """
-    Get detailed view of a specific workflow including:
-    - Success rate and outcome breakdown
-    - Common command paths
-    - Recent runs
-    """
-    # Check if workflow exists
+    """Get detailed view of a specific workflow filtered by tool."""
+    tool_name = api_key.tool_name
+
     exists = db.query(WorkflowRun).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.workflow_name == workflow_name
     ).first()
 
     if not exists:
         raise HTTPException(status_code=404, detail=f"Workflow '{workflow_name}' not found")
 
-    # Get totals and outcomes
     total_runs = db.query(func.count(WorkflowRun.id)).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.workflow_name == workflow_name
     ).scalar() or 0
 
     outcomes = {}
     for outcome in ["SUCCESS", "FAILED", "ABANDONED"]:
         count = db.query(func.count(WorkflowRun.id)).filter(
+            WorkflowRun.tool_name == tool_name,
             WorkflowRun.workflow_name == workflow_name,
             WorkflowRun.outcome == outcome,
         ).scalar() or 0
         outcomes[outcome] = count
 
-    # Success rate
     success_rate = round(outcomes.get("SUCCESS", 0) / total_runs * 100, 2) if total_runs > 0 else 0.0
 
-    # Median duration for successful runs
     durations = db.query(WorkflowRun.duration_ms).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.workflow_name == workflow_name,
         WorkflowRun.outcome == "SUCCESS",
         WorkflowRun.duration_ms.isnot(None),
@@ -158,9 +157,9 @@ def get_workflow_detail(
     duration_values = [d[0] for d in durations if d[0] is not None]
     median_duration = calculate_median(duration_values)
 
-    # Common paths
     path_counter: Counter = Counter()
     workflows = db.query(WorkflowRun).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.workflow_name == workflow_name,
         WorkflowRun.command_fingerprint.isnot(None),
     ).all()
@@ -174,8 +173,8 @@ def get_workflow_detail(
         for path, count in path_counter.most_common(5)
     ]
 
-    # Recent runs
     recent = db.query(WorkflowRun).filter(
+        WorkflowRun.tool_name == tool_name,
         WorkflowRun.workflow_name == workflow_name
     ).order_by(WorkflowRun.started_at.desc()).limit(10).all()
 
