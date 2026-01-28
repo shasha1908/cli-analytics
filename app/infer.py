@@ -26,12 +26,14 @@ TERMINAL_COMMANDS = {"deploy", "apply", "release", "publish", "scan", "test", "b
 
 
 def get_command_fingerprint(command_path: list[str], flags: list[str]) -> str:
-    """Create a fingerprint from command path and flags."""
+    """Create a fingerprint from command path and flags (max 500 chars)."""
     path_str = "/".join(command_path)
     if flags:
-        flags_str = ",".join(sorted(flags))
-        return f"{path_str}[{flags_str}]"
-    return path_str
+        flags_str = ",".join(sorted(flags[:20]))  # Limit to 20 flags
+        result = f"{path_str}[{flags_str}]"
+    else:
+        result = path_str
+    return result[:500] if len(result) > 500 else result
 
 
 def is_entry_command(command_path: list[str]) -> bool:
